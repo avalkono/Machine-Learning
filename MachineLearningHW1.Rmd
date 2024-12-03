@@ -1,0 +1,159 @@
+---
+title: "Machine Learning HW 1"
+output: html_document
+date: "2024-10-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(stats)
+library(UsingR)
+library(AmesHousing)
+library(caret)
+library(glmnet)
+library(car)
+library(earth)
+library(DescTools)
+library(corrplot)
+library(mgcv)
+library(visreg)
+library(Hmisc)
+library(ROCit)
+library(MASS)
+library(brant)
+library(VGAM)
+```
+
+```{r}
+ins_t <- read_csv('train.csv')
+ins_v <- read_csv('validation.csv')
+
+```
+
+```{r}
+mars1 <- earth(INS~ ., data = ins_t)
+summary(mars1)
+```
+
+
+```{r}
+continuous_vars <- c("TELLER", "POS", "LORES", "CHECKS", "AGE", "INVBAL", "HMVAL", "INCOME", "CRSCORE", "CDBAL", "ACCTAGE", "IRABAL", "NSFAMT", "MMBAL", "POSAMT", "CCBAL", "SAVBAL", "ATMAMT", "DEPAMT", "DDABAL", "PHONE", "DEP")
+
+categorical_vars <- c("DDA", "DIRDEP", "NSF", "SAV", "ATM", "CD", "IRA", "INV", "MM", "CC", "SDB", "INAREA", "BRANCH", "CCPURC", "MMCRED")
+
+
+spline_formula <- paste("s(", continuous_vars, ")", collapse = " + ")
+categorical_formula <- paste("factor(", categorical_vars, ")", collapse = " + ")
+full_formula <- as.formula(paste("INS ~", spline_formula, "+", categorical_formula))
+
+full_formula
+```
+
+```{r}
+gam_model <- gam(full_formula, family = binomial, data = ins_t, select=TRUE)
+```
+
+```{r}
+summary(gam_model)
+```
+
+```{r}
+set.seed(100)
+continuous_vars2 <- c("TELLER", "CHECKS", "CDBAL", "ACCTAGE", "MMBAL", "CCBAL", "SAVBAL", "ATMAMT", "DDABAL", "DEP")
+
+categorical_vars2 <- c("DDA", "CD", "IRA", "INV", "CC",  "BRANCH")
+
+
+spline_formula2 <- paste("s(", continuous_vars2, ")", collapse = " + ")
+categorical_formula2 <- paste("factor(", categorical_vars2, ")", collapse = " + ")
+full_formula2 <- as.formula(paste("INS ~", spline_formula2, "+", categorical_formula2))
+
+gam_model_2 <- gam(full_formula2, family = binomial, data = ins_t, select=TRUE)
+summary(gam_model_2)
+```
+
+```{r}
+gam <- gam(INS~s(TELLER), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Teller")
+
+gam <- gam(INS~s(CHECKS), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Checks")
+
+gam <- gam(INS~s(ACCTAGE), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Account Age")
+
+gam <- gam(INS~s(MMBAL), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "MM Balance")
+
+gam <- gam(INS~s(SAVBAL), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Savings Balance")
+
+gam <- gam(INS~s(ATMAMT), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "ATM Amount")
+
+gam <- gam(INS~s(DDABAL), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Checking Balance")
+
+gam <- gam(INS~s(CDBAL), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Certificate Deposit Balance")
+
+gam <- gam(INS~s(CCBAL), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Credit Card Balance")
+
+gam <- gam(INS~s(DEP), family = binomial, data = ins_t, select=TRUE)
+plot(gam, main = "Checking Deposits")
+```
+
+
+
+
+```{r}
+ins_t$p_hat <- predict(gam_model_2, type = "response")
+
+logit_roc <- rocit(ins_t$p_hat, ins_t$INS)
+plot(logit_roc)$optimal
+summary(logit_roc)
+```
+
+
+
+```{r}
+library(caret)
+ins_t$INS = as.factor(ins_t$INS)
+ins_t <- ins_t %>% mutate(INS_hat = ifelse(p_hat > 0.3268670147, 1, 0))
+ins_t$INS_hat = as.factor(ins_t$INS_hat)
+caret::confusionMatrix(ins_t$INS_hat, ins_t$INS)
+```
+```{r}
+length(ins_t$p_hat)
+length(ins_t$INS)
+```
+
+
+```{r}
+ins_t$p_hat2 <- predict(gam_model, type = "response")
+
+logit_roc <- rocit(ins_t$p_hat2, ins_t$INS)
+plot(logit_roc)$optimal
+summary(logit_roc)
+
+survival::concordance(gam_model)
+```
+
+```{r}
+ins_v$p_hat <- predict(gam_model, ins_v, type = "response")
+
+logit_roc <- rocit(ins_v$p_hat, ins_v$INS)
+plot(logit_roc)$optimal
+summary(logit_roc)
+
+survival::concordance(gam_model)
+
+```
+
+
+
+
