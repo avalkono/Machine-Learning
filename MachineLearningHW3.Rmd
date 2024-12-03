@@ -1,0 +1,131 @@
+---
+title: "Machine Learning HW 3"
+output: html_document
+date: "2024-11-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(stats)
+library(UsingR)
+library(AmesHousing)
+library(caret)
+library(glmnet)
+library(car)
+library(earth)
+library(DescTools)
+library(corrplot)
+library(mgcv)
+library(visreg)
+library(Hmisc)
+library(ROCit)
+library(MASS)
+library(brant)
+library(VGAM)
+library(randomForest)
+library(xgboost)
+library(Ckmeans.1d.dp)
+library(pdp)
+library(NeuralNetTools)
+library(nnet)
+library(reshape2)
+library(e1071)
+library(klaR)
+library(iml)
+```
+
+```{r}
+train <- read_csv('train.csv')
+validation <- read_csv('validation.csv')
+```
+
+```{r}
+categorical_vars <- c("DDA", "DIRDEP", "NSF", "SAV", "ATM", "CD", "IRA", "INV", "MM", "CC", "SDB", "INAREA", "BRANCH", "CCPURC", "MMCRED")
+
+train <- train %>% 
+  mutate(across(all_of(categorical_vars), ~ as.factor(.x)))
+
+validation <- validation %>% 
+  mutate(across(all_of(categorical_vars), ~ as.factor(.x)))
+
+
+
+continuous_vars <- c("TELLER", "POS", "LORES", "CHECKS", "AGE", "INVBAL", "HMVAL", "INCOME", "CRSCORE", "CDBAL", "ACCTAGE", "IRABAL", "NSFAMT", "MMBAL", "POSAMT", "CCBAL", "SAVBAL", "ATMAMT", "DEPAMT", "DDABAL", "PHONE", "DEP")
+
+train <- train %>% 
+  mutate(across(all_of(continuous_vars ), ~ scale(.x)))
+
+validation <- validation %>% 
+  mutate(across(all_of(continuous_vars ), ~ scale(.x)))
+
+train$INS = as.factor(train$INS)
+validation$INS = as.factor(validation$INS)
+```
+
+```{r}
+set.seed(12345)
+continuous_formula <- paste(continuous_vars, collapse = " + ")
+categorical_formula <- paste(categorical_vars, collapse = " + ")
+full_formula <- as.formula(paste("INS ~", continuous_formula, "+", categorical_formula))
+
+
+nn1 <- nnet(full_formula, data = train, size = 1, linout = FALSE)
+
+plotnet(nn1)
+```
+
+```{r}
+tune_grid <- expand.grid(
+  .size = c(3, 4, 5, 6, 7),
+  .decay = c(0, 0.5, 1)
+)
+
+nn.caret = caret::train(full_formula, data = train,
+                        method = "nnet", 
+                        tuneGrid = tune_grid,
+                        trControl = trainControl(method = 'cv', number = 10),
+                       trace = FALSE, linout = FALSE)
+
+nn.caret$bestTune
+```
+
+```{r}
+nn.caret$results
+```
+
+
+```{r}
+nn2 <- nnet(full_formula, data = train, size = 4, decay=1, linout = FALSE)
+
+plotnet(nn2)
+```
+
+```{r}
+train$p_hat <- predict(nn2, type = "raw")
+
+logit_roc <- rocit(as.numeric(train$p_hat), as.numeric(train$INS))
+plot(logit_roc)$optimal
+summary(logit_roc)
+```
+
+```{r}
+validation$p_hat <- predict(nn2, newdata= validation, type = "raw")
+
+logit_roc <- rocit(as.numeric(validation$p_hat), as.numeric(validation$INS))
+plot(logit_roc)$optimal
+summary(logit_roc)
+```
+
+
+
+
+
+
+
+
+
+
+
